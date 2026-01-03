@@ -24,7 +24,6 @@ export const parsePMMGFiles = async (
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
       
-      // 1. Organizar texto por linhas (coordenada Y)
       const linesMap: Map<number, any[]> = new Map();
       textContent.items.forEach((item: any) => {
         const y = Math.round(item.transform[5]);
@@ -34,7 +33,6 @@ export const parsePMMGFiles = async (
 
       const sortedY = Array.from(linesMap.keys()).sort((a, b) => b - a);
       
-      // 2. Tentar achar a Data da Página primeiro (Geralmente no topo após "Data:")
       let pageDate = '';
       const fullPageText = textContent.items.map((it: any) => it.str).join(' ');
       const globalDateMatch = fullPageText.match(dateRegex);
@@ -42,7 +40,6 @@ export const parsePMMGFiles = async (
         pageDate = globalDateMatch[0];
       }
 
-      // 3. Processar linhas mantendo o contexto do Turno
       let currentShiftTimes: { start: string, end: string, hours: number } | null = null;
 
       for (const y of sortedY) {
@@ -50,16 +47,13 @@ export const parsePMMGFiles = async (
         const lineText = lineItems.map(it => it.str).join(' ');
         const upperLine = lineText.toUpperCase();
 
-        // Detectar se a linha é um novo cabeçalho de Data (Sobrescreve a da página se necessário)
         const specificDateMatch = lineText.match(dateRegex);
         if (upperLine.includes('DATA:') && specificDateMatch) {
           pageDate = specificDateMatch[0];
         } else if (specificDateMatch && !pageDate) {
-           // Caso a data esteja flutuando sozinha numa linha
            pageDate = specificDateMatch[0];
         }
 
-        // Detectar novo cabeçalho de TURNO
         if (upperLine.includes('TURNO:')) {
           const match = lineText.match(timeRegex);
           if (match) {
@@ -75,7 +69,6 @@ export const parsePMMGFiles = async (
           }
         }
 
-        // Se acharmos o militar, usamos o Turno e a Data ativos
         if (upperLine.includes(normalizedTarget) && currentShiftTimes && pageDate) {
           
           let monthYear = 'Geral';
@@ -88,18 +81,19 @@ export const parsePMMGFiles = async (
             results[monthYear] = { monthYear, totalHours: 0, shifts: [] };
           }
 
-          // Evita duplicar o mesmo turno se o nome aparecer mais de uma vez na mesma linha (ex: nome e observação)
           const isDuplicate = results[monthYear].shifts.some(s => 
             s.date === pageDate && s.startTime === currentShiftTimes?.start && s.endTime === currentShiftTimes?.end
           );
 
           if (!isDuplicate) {
             results[monthYear].shifts.push({
+              id: Math.random().toString(36).substr(2, 9),
               date: pageDate,
               startTime: currentShiftTimes.start,
               endTime: currentShiftTimes.end,
               hours: currentShiftTimes.hours,
-              fileName: file.name
+              fileName: file.name,
+              isManual: false
             });
             results[monthYear].totalHours += currentShiftTimes.hours;
           }

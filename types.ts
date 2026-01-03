@@ -1,10 +1,13 @@
 
 export interface Shift {
+  id: string; // Adicionado ID para controle de exclusão/edição
   date: string;
-  startTime: string;
-  endTime: string;
+  startTime?: string;
+  endTime?: string;
   hours: number;
-  fileName: string;
+  fileName?: string;
+  description?: string; // Campo de texto solicitado pelo usuário
+  isManual?: boolean;   // Identificador de lançamento manual
 }
 
 export interface MonthData {
@@ -17,7 +20,6 @@ export interface ProcessResult {
   [key: string]: MonthData;
 }
 
-// Added to support Gemini analysis output and Dashboard component
 export interface GeminiShift {
   date: string;
   startTime: string;
