@@ -1,0 +1,5 @@
+{
+  "name": "Gestor de Carga Horária PMMG",
+  "description": "Sistema inteligente para controle de banco de horas e escala de serviço da Polícia Militar de Minas Gerais, utilizando IA para analisar escalas em PDF.",
+  "requestFramePermissions": []
+}
