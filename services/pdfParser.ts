@@ -1,18 +1,49 @@
 
-import { Shift, ProcessResult } from '../types';
+import { Shift, ProcessResult, MonthData } from '../types';
 
-// Configuração do PDF.js
 const pdfjsLib = window['pdfjs-dist/build/pdf'];
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+/**
+ * Limpa a linha de texto da escala para extrair apenas o nome do militar.
+ * Remove (matrícula), patentes/graduações (SD, CB, SGT, etc) e funções (- Condutor, etc).
+ */
+const cleanMilitarName = (lineText: string, searchTarget: string): string => {
+  let cleaned = lineText;
+  
+  // 1. Remove parênteses e o conteúdo dentro deles (geralmente a matrícula)
+  cleaned = cleaned.replace(/\([\d.-]+\)/g, '');
+  
+  // 2. Remove sufixos após o traço (geralmente a função como - Condutor, - Comandante)
+  cleaned = cleaned.replace(/\s*-\s*.*$/, '');
+  
+  // 3. Lista de patentes e termos comuns em escalas PMMG para remover
+  const termsToRemove = [
+    'SD', 'CB', 'SGT', 'TEN', 'CAP', 'MAJ', 'CEL', 'SUB', 'TEN', 
+    '1 CL', '2 CL', '3 CL', 'CL', '1º', '2º', '3º', 'AL', 'CHO', 'CFS'
+  ];
+  
+  // Cria uma regex para remover esses termos de forma isolada (case insensitive)
+  termsToRemove.forEach(term => {
+    const regex = new RegExp(`\\b${term}\\b`, 'gi');
+    cleaned = cleaned.replace(regex, '');
+  });
+
+  // 4. Remove números soltos (como o "1" em SD 1 CL)
+  cleaned = cleaned.replace(/\b\d+\b/g, '');
+
+  // 5. Remove espaços extras e converte para maiúsculo
+  return cleaned.trim().replace(/\s+/g, ' ').toUpperCase();
+};
 
 export const parsePMMGFiles = async (
   files: File[],
   targetName: string
 ): Promise<ProcessResult> => {
-  const results: ProcessResult = {};
+  const months: { [key: string]: MonthData } = {};
   const normalizedTarget = targetName.toUpperCase().trim();
+  let detectedName = '';
 
-  // Regex para horários PMMG: (06:30:00)07:00:00 - 17:00:00
   const timeRegex = /(?:\([\d:]{5,8}\))?(\d{2}[:h]\d{2}(?::\d{2})?)\s*(?:AS|ÀS|-|A)\s*(\d{2}[:h]\d{2}(?::\d{2})?)/i;
   const dateRegex = /(\d{2}\/\d{2}\/\d{4})/;
 
@@ -64,43 +95,52 @@ export const parsePMMGFiles = async (
             const [h2, m2] = end.split(':').map(Number);
             let diff = (h2 + m2/60) - (h1 + m1/60);
             if (diff <= 0) diff += 24;
-
             currentShiftTimes = { start, end, hours: diff };
           }
         }
 
-        if (upperLine.includes(normalizedTarget) && currentShiftTimes && pageDate) {
-          
-          let monthYear = 'Geral';
-          const dateParts = pageDate.split('/');
-          if (dateParts.length === 3) {
-            monthYear = `${dateParts[1]}/${dateParts[2]}`;
+        if (upperLine.includes(normalizedTarget)) {
+          // Extrai e limpa o nome caso o alvo seja encontrado
+          if (!detectedName) {
+            detectedName = cleanMilitarName(lineText, normalizedTarget);
           }
 
-          if (!results[monthYear]) {
-            results[monthYear] = { monthYear, totalHours: 0, shifts: [] };
-          }
+          if (currentShiftTimes && pageDate) {
+            let monthYear = 'Geral';
+            const dateParts = pageDate.split('/');
+            if (dateParts.length === 3) {
+              monthYear = `${dateParts[1]}/${dateParts[2]}`;
+            }
 
-          const isDuplicate = results[monthYear].shifts.some(s => 
-            s.date === pageDate && s.startTime === currentShiftTimes?.start && s.endTime === currentShiftTimes?.end
-          );
+            if (!months[monthYear]) {
+              months[monthYear] = { monthYear, totalHours: 0, shifts: [] };
+            }
 
-          if (!isDuplicate) {
-            results[monthYear].shifts.push({
-              id: Math.random().toString(36).substr(2, 9),
-              date: pageDate,
-              startTime: currentShiftTimes.start,
-              endTime: currentShiftTimes.end,
-              hours: currentShiftTimes.hours,
-              fileName: file.name,
-              isManual: false
-            });
-            results[monthYear].totalHours += currentShiftTimes.hours;
+            const isDuplicate = months[monthYear].shifts.some(s => 
+              s.date === pageDate && s.startTime === currentShiftTimes?.start && s.endTime === currentShiftTimes?.end
+            );
+
+            if (!isDuplicate) {
+              months[monthYear].shifts.push({
+                id: Math.random().toString(36).substr(2, 9),
+                date: pageDate,
+                startTime: currentShiftTimes.start,
+                endTime: currentShiftTimes.end,
+                hours: currentShiftTimes.hours,
+                fileName: file.name,
+                isManual: false
+              });
+              months[monthYear].totalHours += currentShiftTimes.hours;
+            }
           }
         }
       }
     }
   }
 
-  return results;
+  return { 
+    months, 
+    detectedName: detectedName || '',
+    targetSearch: normalizedTarget
+  };
 };

@@ -1,23 +1,25 @@
 
 export interface Shift {
-  id: string; // Adicionado ID para controle de exclusão/edição
+  id: string;
   date: string;
   startTime?: string;
   endTime?: string;
   hours: number;
   fileName?: string;
-  description?: string; // Campo de texto solicitado pelo usuário
-  isManual?: boolean;   // Identificador de lançamento manual
+  description?: string;
+  isManual?: boolean;
 }
 
 export interface MonthData {
-  monthYear: string; // Ex: "05/2024"
+  monthYear: string;
   totalHours: number;
   shifts: Shift[];
 }
 
 export interface ProcessResult {
-  [key: string]: MonthData;
+  months: { [key: string]: MonthData };
+  detectedName?: string;
+  targetSearch?: string;
 }
 
 export interface GeminiShift {
